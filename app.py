@@ -8,20 +8,33 @@ import io
 import os
 import gdown
 
-MODEL_URL = "https://drive.google.com/uc?id=1TQ2_ozS3crjqchAPXNCBuyVs2SvZdf9R"
-MODEL_PATH = "tumor_classifier.h5"
+# === MODELOS ===
+# Modelo de clasificación
+CLASSIFIER_URL = "https://drive.google.com/uc?id=1TQ2_ozS3crjqchAPXNCBuyVs2SvZdf9R"
+CLASSIFIER_PATH = "tumor_classifier.h5"
 
-if not os.path.exists(MODEL_PATH):
-    print("Descargando modelo...")
-    gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
+# Modelo de segmentación
+SEGMENTATION_URL = "https://drive.google.com/uc?id=1-8qtBsW7FTAGf9nqMToHFIwUmlB0PtVb"
+SEGMENTATION_PATH = "segmentacion.keras"
 
+# Descargar si no existen
+if not os.path.exists(CLASSIFIER_PATH):
+    print("Descargando modelo de clasificación...")
+    gdown.download(CLASSIFIER_URL, CLASSIFIER_PATH, quiet=False)
+
+if not os.path.exists(SEGMENTATION_PATH):
+    print("Descargando modelo de segmentación...")
+    gdown.download(SEGMENTATION_URL, SEGMENTATION_PATH, quiet=False)
+
+# === FLASK APP ===
 app = Flask(__name__)
 CORS(app)
 
-# Cargar los modelos
-resnet_model = load_model("tumor_classifier.h5")    # espera RGB (128x128x3)
-unet_model = load_model("segmentacion.keras")         # espera grises (256x256x1)
+# Cargar modelos
+resnet_model = load_model(CLASSIFIER_PATH)          # (128x128x3)
+unet_model = load_model(SEGMENTATION_PATH)          # (256x256x1)
 
+# === UTILIDAD ===
 def image_to_base64(img_arr):
     if img_arr.ndim == 3 and img_arr.shape[-1] == 1:
         img_arr = img_arr.squeeze(axis=-1)
@@ -30,6 +43,7 @@ def image_to_base64(img_arr):
     img_pil.save(buffer, format="PNG")
     return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
+# === ENDPOINT ===
 @app.route('/predict', methods=['POST'])
 def predict():
     file = request.files['image']
