@@ -50,7 +50,7 @@ def pil_to_bytes_io(pil_img):
 # === ENDPOINT ===
 @app.route('/predict', methods=['POST'])
 def predict():
-    file = request.files['image']
+    file = request.files['data']
 
     # Clasificador → RGB (128x128x3)
     img_rgb = Image.open(file).resize((128, 128)).convert('RGB')
