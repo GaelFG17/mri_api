@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, send_file
 from flask_cors import CORS
 from tensorflow.keras.models import load_model
 import numpy as np
@@ -7,17 +7,18 @@ import base64
 import io
 import os
 import gdown
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
 
 # === MODELOS ===
-# Modelo de clasificación
 CLASSIFIER_URL = "https://drive.google.com/uc?id=1TQ2_ozS3crjqchAPXNCBuyVs2SvZdf9R"
 CLASSIFIER_PATH = "tumor_classifier.h5"
 
-# Modelo de segmentación
 SEGMENTATION_URL = "https://drive.google.com/uc?id=1-8qtBsW7FTAGf9nqMToHFIwUmlB0PtVb"
 SEGMENTATION_PATH = "segmentacion.keras"
 
-# Descargar si no existen
+# Descargar modelos si no existen
 if not os.path.exists(CLASSIFIER_PATH):
     print("Descargando modelo de clasificación...")
     gdown.download(CLASSIFIER_URL, CLASSIFIER_PATH, quiet=False)
@@ -34,14 +35,17 @@ CORS(app)
 resnet_model = load_model(CLASSIFIER_PATH)          # (128x128x3)
 unet_model = load_model(SEGMENTATION_PATH)          # (256x256x1)
 
-# === UTILIDAD ===
-def image_to_base64(img_arr):
-    if img_arr.ndim == 3 and img_arr.shape[-1] == 1:
-        img_arr = img_arr.squeeze(axis=-1)
-    img_pil = Image.fromarray((img_arr * 255).astype(np.uint8))
-    buffer = io.BytesIO()
-    img_pil.save(buffer, format="PNG")
-    return base64.b64encode(buffer.getvalue()).decode("utf-8")
+# === UTILIDADES ===
+def array_to_pil_image(arr):
+    if arr.ndim == 3 and arr.shape[-1] == 1:
+        arr = arr.squeeze(axis=-1)
+    return Image.fromarray((arr * 255).astype(np.uint8))
+
+def pil_to_bytes_io(pil_img):
+    buf = io.BytesIO()
+    pil_img.save(buf, format='PNG')
+    buf.seek(0)
+    return buf
 
 # === ENDPOINT ===
 @app.route('/predict', methods=['POST'])
@@ -62,12 +66,19 @@ def predict():
     input_gray = np.expand_dims(arr_gray, axis=(0, -1))
 
     if tumor_prob < 0.0002:
-        mri_base64 = image_to_base64(arr_gray)
-        return jsonify({
-            "result": "No hay tumor",
-            "probability": float(tumor_prob),
-            "mri": mri_base64
-        })
+        img_pil = array_to_pil_image(arr_gray)
+        img_buf = pil_to_bytes_io(img_pil)
+
+        # Crear PDF con solo la imagen original
+        pdf_buf = io.BytesIO()
+        c = canvas.Canvas(pdf_buf, pagesize=letter)
+        c.drawString(100, 750, "Resultado: No hay tumor detectado.")
+        c.drawString(100, 735, f"Probabilidad: {tumor_prob:.6f}")
+        c.drawImage(ImageReader(img_buf), 100, 450, width=256, height=256)
+        c.save()
+        pdf_buf.seek(0)
+
+        return send_file(pdf_buf, mimetype='application/pdf', download_name='resultado.pdf')
 
     # Segmentación
     pred_mask = unet_model.predict(input_gray)[0]
@@ -77,18 +88,32 @@ def predict():
     overlay = np.stack([arr_gray]*3, axis=-1)
     overlay[pred_mask_bin == 1] = [1, 0, 0]
 
-    # Convertir imágenes a base64
-    mri_base64 = image_to_base64(arr_gray)
-    mask_base64 = image_to_base64(np.stack([pred_mask_bin]*3, axis=-1))
-    overlay_base64 = image_to_base64(overlay)
+    # Convertir imágenes a PIL
+    mri_img = array_to_pil_image(arr_gray)
+    mask_img = array_to_pil_image(np.stack([pred_mask_bin]*3, axis=-1))
+    overlay_img = array_to_pil_image(overlay)
 
-    return jsonify({
-        "result": "Tumor detectado",
-        "probability": float(tumor_prob),
-        "mri": mri_base64,
-        "mask": mask_base64,
-        "overlay": overlay_base64
-    })
+    # Buffers para insertar en PDF
+    mri_buf = pil_to_bytes_io(mri_img)
+    mask_buf = pil_to_bytes_io(mask_img)
+    overlay_buf = pil_to_bytes_io(overlay_img)
 
+    # Crear PDF
+    pdf_buf = io.BytesIO()
+    c = canvas.Canvas(pdf_buf, pagesize=letter)
+    c.drawString(100, 750, "Resultado: Tumor detectado")
+    c.drawString(100, 735, f"Probabilidad: {tumor_prob:.6f}")
+    c.drawString(100, 700, "Imagen original:")
+    c.drawImage(ImageReader(mri_buf), 100, 450, width=256, height=256)
+    c.drawString(100, 430, "Máscara:")
+    c.drawImage(ImageReader(mask_buf), 100, 200, width=256, height=256)
+    c.drawString(380, 430, "Overlay:")
+    c.drawImage(ImageReader(overlay_buf), 380, 200, width=256, height=256)
+    c.save()
+    pdf_buf.seek(0)
+
+    return send_file(pdf_buf, mimetype='application/pdf', download_name='resultado.pdf')
+
+# === MAIN ===
 if __name__ == '__main__':
     app.run(debug=True)
