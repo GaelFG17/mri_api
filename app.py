@@ -65,7 +65,7 @@ def predict():
     arr_gray = np.array(img_gray) / 255.0
     input_gray = np.expand_dims(arr_gray, axis=(0, -1))
 
-    if tumor_prob < 0.080:
+    if tumor_prob < 0.0885:
         img_pil = array_to_pil_image(arr_gray)
         img_buf = pil_to_bytes_io(img_pil)
 
