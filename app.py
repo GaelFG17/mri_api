@@ -15,7 +15,7 @@ from reportlab.lib.utils import ImageReader
 CLASSIFIER_URL = "https://drive.google.com/uc?id=1TQ2_ozS3crjqchAPXNCBuyVs2SvZdf9R"
 CLASSIFIER_PATH = "tumor_classifier.h5"
 
-SEGMENTATION_URL = "https://drive.google.com/uc?id=1-8qtBsW7FTAGf9nqMToHFIwUmlB0PtVb"
+SEGMENTATION_URL = "https://drive.google.com/uc?id=1Ft8ttlApP3vyF5NMYl9UxFOg4kimZAMG"
 SEGMENTATION_PATH = "segmentacion.keras"
 
 # Descargar modelos si no existen
