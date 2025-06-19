@@ -82,7 +82,7 @@ def predict():
 
     # Segmentación
     pred_mask = unet_model.predict(input_gray)[0]
-    pred_mask_bin = (pred_mask > 0.5).astype(np.uint8).squeeze()
+    pred_mask_bin = (pred_mask > 0.2).astype(np.uint8).squeeze()
 
     # Crear overlay en color
     overlay = np.stack([arr_gray]*3, axis=-1)
